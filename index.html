@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Study Calendar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: month calendar on the left, the chosen day's expandable schedule on the right; plan summary and resources below */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --sunk:#eef1f6; --fg:#1b2230; --muted:#5f6b7e; --line:#dde2ea; --accent:#2f5bd3;
+  --vac:#fff4dc; --vac-line:#efd9a6;
+  --c-health:#1f9d6b; --c-dsa:#c2410c; --c-study:#2f5bd3; --c-app:#7c3aed; --c-stock:#a87a00;
+  --c-work:#64748b; --c-fun:#db2777; --c-life:#94a3b8; --c-lang:#0e7490; --c-chess:#4d7c0f;
+  --f-display:"Bricolage Grotesque",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11151d; --surface:#1a202b; --sunk:#151a23; --fg:#e7ebf2; --muted:#9aa5b8; --line:#2b3342; --accent:#7f9cff;
+  --vac:#2a2416; --vac-line:#4a3f22;
+  --c-health:#3fcf95; --c-dsa:#fb8a4c; --c-study:#7f9cff; --c-app:#b18cff; --c-stock:#e6b93d;
+  --c-work:#8b98ad; --c-fun:#f472b6; --c-life:#6b7790; --c-lang:#22b8d6; --c-chess:#a3d65c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151d; --surface:#1a202b; --sunk:#151a23; --fg:#e7ebf2; --muted:#9aa5b8; --line:#2b3342; --accent:#7f9cff;
+  --vac:#2a2416; --vac-line:#4a3f22;
+  --c-health:#3fcf95; --c-dsa:#fb8a4c; --c-study:#7f9cff; --c-app:#b18cff; --c-stock:#e6b93d;
+  --c-work:#8b98ad; --c-fun:#f472b6; --c-life:#6b7790; --c-lang:#22b8d6; --c-chess:#a3d65c; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:28px 56px;display:grid;gap:32px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:21px;font-weight:600}
+h3{font-size:16px;font-weight:600}
+a{color:var(--accent);text-underline-offset:2px}
+.sub{color:var(--muted);margin:6px 0 0;max-width:68ch}
+.muted{color:var(--muted)}
+.stats{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:14px;font-size:14px}
+.stats b{font-family:var(--f-mono);font-weight:500;font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px;background:var(--cat)}
+.legend i.vac{background:var(--vac);border:1px solid var(--vac-line)}
+
+.main{display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:minmax(0,1fr)}}
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:900px){.cal{position:static}}
+.calhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.mtabs{display:flex;gap:4px}
+.btn{font:600 13px var(--f-body);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.btn[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn:focus-visible,.cell:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.dow{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:center;padding-bottom:2px}
+.cell{min-height:64px;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:5px;text-align:left;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0}
+.cell.vac{background:var(--vac);border-color:var(--vac-line)}
+.cell.off{background:var(--sunk);color:var(--muted);cursor:default;opacity:.6}
+.cell.blank{visibility:hidden}
+.cell.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cell[aria-pressed="true"]{border-color:var(--fg);box-shadow:inset 0 0 0 2px var(--fg)}
+.cell .n{font-family:var(--f-mono);font-size:13px;line-height:1}
+.cell .tag{font-size:10.5px;line-height:1.2;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cell .dots{display:flex;gap:3px;margin-top:auto}
+.cell .dots i{width:6px;height:6px;border-radius:50%;background:var(--cat)}
+.cell .bar{height:3px;border-radius:2px;background:var(--line);overflow:hidden}
+.cell .bar i{display:block;height:100%;background:var(--c-health)}
+@media (max-width:420px){.cell{min-height:52px;padding:4px}.cell .tag{display:none}}
+
+.day{display:grid;gap:12px;min-width:0}
+.dayhead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px}
+.dayhead h2{font-size:24px}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.pill.vac{background:var(--vac);color:var(--fg);border:1px solid var(--vac-line)}
+.focus{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px}
+.focus b{font-weight:600}
+.slots{display:grid;gap:6px}
+details.slot{background:var(--surface);border:1px solid var(--line);border-radius:10px;border-left:4px solid var(--cat)}
+details.slot.done{opacity:.62}
+details.slot summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:118px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 12px}
+details.slot summary::-webkit-details-marker{display:none}
+.time{font-family:var(--f-mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.what{font-weight:600;min-width:0}
+.what small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.chev{color:var(--muted);transition:transform .15s}
+details[open] .chev{transform:rotate(90deg)}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}}
+@media (max-width:480px){details.slot summary{grid-template-columns:minmax(0,1fr) auto}.time{grid-column:1/-1;margin-bottom:-6px}}
+.body{padding:2px 14px 14px;display:grid;gap:10px;font-size:14px}
+.body p{margin:0}
+.body ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.watch{background:color-mix(in srgb,var(--cat) 10%,transparent);border-radius:8px;padding:9px 11px}
+.watch b{font-family:var(--f-mono);font-weight:500;font-variant-numeric:tabular-nums}
+.kind{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--muted);margin-right:6px}
+.probs{display:grid;gap:4px;padding-left:0!important;list-style:none}
+.row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:6px;align-items:start}
+.tick{width:30px;height:42px;display:grid;place-items:center;cursor:pointer}
+.tick input{width:20px;height:20px;accent-color:var(--c-health);cursor:pointer;margin:0}
+.tick.none{cursor:default}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn.ghost{background:transparent}
+.confirm{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.bookbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px}
+.bookbar label.btn{display:inline-block}
+.bookbar input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.pdfa{font-weight:600}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;gap:6px;align-content:start}
+.card p,.card ul{margin:0;font-size:14px;color:var(--muted)}
+.card ul{padding-left:18px;display:grid;gap:3px}
+.tablebox{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px;background:var(--surface);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+td:first-child{font-weight:600;white-space:nowrap}
+.foot{font-size:13px;color:var(--muted)}
+</style>
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>My Study Calendar</h1>
+    <p class="sub">Oct 11 – Dec 31, 2026. SQL and stock market are taken from the basics to interview depth by December 31; DSA runs 2 problems every day; .NET, Angular and operating systems move at a lighter pace and continue in January. Dec 21–31 is a vacation study sprint with free afternoons. Click a day, then click any time slot for the details.</p>
+    <div class="stats" id="stats"></div>
+    <div class="legend" id="legend"></div>
+    <div class="bookbar">
+      <span><b>Stock Investing Mastermind</b> <span class="muted" id="bookstatus">Not loaded. Every stock market slot still lists the exact PDF pages to read.</span></span>
+      <label class="btn" for="bookfile">Load my PDF</label>
+      <input type="file" id="bookfile" accept="application/pdf">
+      <button class="btn ghost" id="bookclear" hidden>Remove</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="cal" aria-label="Calendar">
+      <div class="calhead">
+        <h3 id="mtitle">October 2026</h3>
+        <div class="mtabs" id="mtabs"></div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <p class="foot" style="margin:10px 0 0">Green bar = share of the day's tasks you've ticked. Ticks are saved in this browser.</p>
+    </section>
+    <section class="day" id="day" aria-live="polite"></section>
+  </div>
+
+  <section>
+    <h2 style="margin-bottom:12px">How the plan is built</h2>
+    <div class="cards" id="summary"></div>
+  </section>
+
+  <section>
+    <h2 style="margin-bottom:12px">Weekly rhythm</h2>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Day</th><th>5:40–6:45 AM</th><th>Evening</th><th>Other study</th></tr></thead>
+        <tbody>
+          <tr><td>Mon</td><td>SQL video</td><td>Finance Manager App 7–8:10 PM</td><td>—</td></tr>
+          <tr><td>Tue</td><td>SQL practice</td><td>Finance Manager App</td><td>—</td></tr>
+          <tr><td>Wed</td><td>.NET / C#</td><td>Finance Manager App</td><td>—</td></tr>
+          <tr><td>Thu</td><td>Angular and OS, alternate weeks</td><td>Finance Manager App</td><td>—</td></tr>
+          <tr><td>Fri</td><td>Stock market video</td><td>Series</td><td>—</td></tr>
+          <tr><td>Sat</td><td>DSA 6:10, walk 6:45</td><td>Movie / series</td><td>Shopping 8:45–11, stock reading 11–12, app 2–5 PM</td></tr>
+          <tr><td>Sun</td><td>DSA 6:10, walk 6:45</td><td>Series</td><td>SQL 8–10, Cloud/AI 10–10:45, stock practice 10:45–12:30, gaming 2–5:30</td></tr>
+          <tr><td>Dec 21–31</td><td>SQL</td><td>Finance Manager App 7–8:30 PM</td><td>SQL block 8:45–10:30, stock block 10:45–12:15, afternoons free</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2 style="margin-bottom:12px">Main resources</h2>
+    <div class="cards" id="resources"></div>
+  </section>
+
+  <div class="tools"><span class="foot">Progress is saved in this browser.</span><span id="resetwrap"><button class="btn ghost" id="resetall">Reset all progress</button></span></div>
+  <p class="foot">Stock market material here is for learning to analyse companies. It is not investment advice.</p>
+</div>
+
+<script>
+/* ---------- helpers ---------- */
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const D=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const K=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const START="2026-10-11",END="2026-12-31",VAC_FROM="2026-12-21",HOLIDAY="2026-12-25";
+const fmtT=t=>{let[h,m]=t.split(":").map(Number);const ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+String(m).padStart(2,"0")+" "+ap};
+const hms=m=>Math.floor(m/60)+":"+String(m%60).padStart(2,"0")+":00";
+const CAT={health:["Walk","--c-health"],dsa:["DSA","--c-dsa"],study:["Tech study","--c-study"],app:["Finance App","--c-app"],stock:["Stock market","--c-stock"],work:["Office","--c-work"],lang:["Duolingo","--c-lang"],chess:["Chess","--c-chess"],fun:["Fun","--c-fun"],life:["Life","--c-life"]};
+const TRACK=["health","dsa","study","app","stock","lang","chess"];
+
+/* ---------- links ---------- */
+const U={
+ baraa:"https://www.youtube.com/watch?v=SSKVgrwhzus",sqlbolt:"https://sqlbolt.com/",lcsql:"https://leetcode.com/studyplan/top-sql-50/",hrsql:"https://www.hackerrank.com/domains/sql",datalemur:"https://datalemur.com/questions",luke:"https://use-the-index-luke.com/",
+ norm:"https://learn.microsoft.com/en-us/office/troubleshoot/access/database-normalization-description",iso:"https://learn.microsoft.com/en-us/sql/t-sql/statements/set-transaction-isolation-level-transact-sql",
+ csv:"https://www.youtube.com/watch?v=GhQdlIFylQ8",dnvid:"https://dotnet.microsoft.com/en-us/learn/videos",dnyt:"https://www.youtube.com/dotnet",ms:"https://learn.microsoft.com/en-us/",
+ ng:"https://www.youtube.com/watch?v=3qBXWUpoPHo",ngtut:"https://angular.dev/tutorials/learn-angular",ngd:"https://angular.dev/guide/",ts:"https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes.html",
+ os:"https://www.youtube.com/watch?v=vBURTt97EkA",ostep:"https://pages.cs.wisc.edu/~remzi/OSTEP/",
+ docker:"https://www.youtube.com/watch?v=3c-iBn73dDE",dockdocs:"https://docs.docker.com/get-started/",
+ az:"https://learn.microsoft.com/en-us/credentials/certifications/azure-fundamentals/",genai:"https://github.com/microsoft/generative-ai-for-beginners",
+ var1:"https://zerodha.com/varsity/module/introduction-to-stock-markets/",var3:"https://zerodha.com/varsity/module/fundamental-analysis/",varsity:"https://zerodha.com/varsity/",
+ rr:"https://www.youtube.com/results?search_query=CA+Rachana+Ranade+stock+market+basics",screener:"https://www.screener.in/",neet:"https://neetcode.io/",duo:"https://www.duolingo.com/",chess:"https://www.chess.com/puzzles",lichess:"https://lichess.org/training"};
+const lc=s=>["LeetCode",s.replace(/-/g," ").replace(/^./,c=>c.toUpperCase()),"https://leetcode.com/problems/"+s+"/"];
+const L=(k,l,u)=>[k,l,u];
+const vV=L("Video","Zerodha Varsity: module video",U.varsity), vRR=L("Video","CA Rachana Ranade: beginner videos",U.rr);
+const r1=L("Read","Varsity: Introduction to Stock Markets",U.var1), r3=L("Read","Varsity: Fundamental Analysis",U.var3);
+const pdfL=(a,b)=>["PDF","Stock Investing Mastermind, pages "+a+"–"+b,"pdf:"+a];
+const scr=L("Practice","Screener.in",U.screener);
+const sbolt=n=>L("Practice","SQLBolt lessons "+n,U.sqlbolt);
+const hr=t=>L("Practice","HackerRank SQL: "+t,U.hrsql);
+
+/* ---------- SQL: video sessions (75 min of video each, at 1.25x) ---------- */
+const SQL_SESS=[];
+for(let d=D(START);d<=D("2026-12-20");d=addDays(d,1)){
+  if(d.getDay()===0)SQL_SESS.push({k:K(d),slot:"sun"});
+  if(d.getDay()===1&&K(d)<="2026-12-14")SQL_SESS.push({k:K(d),slot:"am"});
+}
+SQL_SESS.push({k:"2026-12-21",slot:"am"},{k:"2026-12-21",slot:"block"},{k:"2026-12-22",slot:"am"});
+SQL_SESS.forEach((s,i)=>{s.from=i*75;s.to=i===SQL_SESS.length-1?null:(i+1)*75});
+const sqlWatch=(k,slot)=>SQL_SESS.find(s=>s.k===k&&s.slot===slot);
+
+/* SQL weekly content: [video topics you'll reach, Tuesday practice, Sunday practice] */
+const SQLW=[
+ ["Course intro, installing SQL Server + SSMS, first SELECT",[],[sbolt("1–3")]],
+ ["SELECT, FROM, WHERE, ORDER BY, DISTINCT, TOP",[sbolt("1–5"),lc("recyclable-and-low-fat-products"),lc("find-customer-referee")],[lc("big-countries"),lc("article-views-i"),lc("invalid-tweets"),hr("Revising the Select Query I & II, Select All, Select By ID")]],
+ ["DDL (CREATE, ALTER, DROP), DML (INSERT, UPDATE, DELETE), filtering with AND / OR / IN / BETWEEN / LIKE",[sbolt("13–18"),hr("Weather Observation Station 1, 3, 4")],[hr("Weather Observation Station 5–9"),hr("Japanese Cities' Attributes, Employee Names")]],
+ ["Joins: INNER, LEFT, RIGHT, FULL, anti joins, CROSS",[sbolt("6–8"),lc("replace-employee-id-with-the-unique-identifier"),lc("product-sales-analysis-i"),lc("customer-who-visited-but-did-not-make-any-transactions")],[lc("rising-temperature"),lc("average-time-of-process-per-machine"),lc("employee-bonus"),lc("combine-two-tables"),lc("employees-earning-more-than-their-managers"),lc("customers-who-never-order")]],
+ ["Advanced joins and set operators: UNION, UNION ALL, INTERSECT, EXCEPT",[lc("students-and-examinations"),lc("managers-with-at-least-5-direct-reports"),lc("confirmation-rate")],[hr("Asian Population, African Cities, Average Population of Each Continent, The Report"),L("Practice","Write 1 query each with UNION, INTERSECT, EXCEPT on the course database","")]],
+ ["String, numeric and date & time functions",[sbolt("9"),lc("fix-names-in-a-table"),lc("patients-with-a-condition"),lc("find-users-with-valid-e-mails")],[lc("group-sold-products-by-the-date"),lc("not-boring-movies"),lc("duplicate-emails")]],
+ ["NULL functions (ISNULL, COALESCE, NULLIF) and CASE WHEN",[sbolt("8"),lc("triangle-judgement"),lc("count-salary-categories")],[lc("average-selling-price"),lc("project-employees-i"),lc("percentage-of-users-attended-a-contest")]],
+ ["Aggregate functions, GROUP BY, HAVING",[sbolt("10–12"),lc("queries-quality-and-percentage"),lc("monthly-transactions-i"),lc("number-of-unique-subjects-taught-by-each-teacher")],[lc("user-activity-for-the-past-30-days-i"),lc("classes-more-than-5-students"),lc("find-followers-count"),lc("biggest-single-number"),lc("customers-who-bought-all-products")]],
+ ["Window functions I: OVER, PARTITION BY, ROW_NUMBER, RANK, DENSE_RANK",[lc("rank-scores"),lc("product-price-at-a-given-date"),lc("last-person-to-fit-in-the-bus")],[lc("consecutive-numbers"),lc("game-play-analysis-iv"),lc("immediate-food-delivery-ii"),lc("department-highest-salary")]],
+ ["Window functions II: LAG, LEAD, running totals, moving averages",[lc("restaurant-growth"),lc("exchange-seats"),lc("primary-department-for-each-employee")],[lc("the-number-of-employees-which-report-to-each-employee"),lc("department-top-three-salaries"),lc("nth-highest-salary")]],
+ ["Subqueries and CTEs (including recursive CTEs)",[lc("employees-whose-manager-left-the-company"),lc("second-highest-salary"),lc("investments-in-2016")],[lc("movie-rating"),lc("friend-requests-ii-who-has-the-most-friends"),L("Practice","DataLemur: 3 free Easy questions",U.datalemur)]]
+];
+
+/* ---------- Stock market weekly content: [Fri video, Sat reading, Sun notes & practice] ---------- */
+const STKW=[
+ [null,null,["Start your book: introduction","Read PDF pages 1–13: why invest, how the book works, are you a retail investor, contents. Make a free Screener.in account.",[pdfL(1,13),L("Practice","Make a free Screener.in account",U.screener)]]],
+ [["Shares and market cap","Watch a beginner video on what a share is, market capitalisation and indices.",[vV,vRR]],["Book: Basics of Stock Market","Read PDF pages 14–43: what a share is, market cap, Sensex & Nifty, large / mid / small caps. Underline every new term.",[pdfL(14,43)]],["Notes + first look at companies","Write notes on pages 14–43 in your own words. On Screener, find one large-, one mid- and one small-cap company and note each one's market cap and sector.",[scr,L("Read","Optional extra: Varsity Module 1, ch 1–7",U.var1)]]],
+ [["How prices move: earnings and value","Video on how earnings drive share prices, and intrinsic value vs market price.",[vV,vRR]],["Book: How Stock Prices Move","Read PDF pages 44–75: size and quality of earnings, true vs market value, bull vs bear markets, value creation, risks.",[pdfL(44,75)]],["Notes + price vs profit","Write notes. For 2 companies, compare 5-year profit growth with share price growth on Screener. Did price follow earnings?",[scr]]],
+ [["Investing vs trading, diversification","Video on investing vs trading and why diversification matters.",[vV,vRR]],["Book: Trading system, investing vs trading, institutional vs retail","Read PDF pages 76–105, including how diversification works.",[pdfL(76,105)]],["Notes + your portfolio rules","Write your own 5 rules: maximum weight per stock, number of stocks, time horizon, what you will never do.",[L("Read","Optional extra: Varsity Module 1, ch 8–15",U.var1)]]],
+ [["Where investment ideas come from","Video on finding stock ideas and reading company filings.",[vV,vRR]],["Book: Investment ideas + where to find information","Read PDF pages 106–129: idea generation, primary and secondary sources, what not to use, researching in 4–5 hours a week.",[pdfL(106,129)]],["Pick your practice company","Pick one company whose products you understand. Download its latest annual report from its website or BSE / NSE.",[scr]]],
+ [["Annual reports","Video on how to read an annual report.",[vV,vRR]],["Book: How to Read Annual Reports","Read PDF pages 130–165: every section of the report and what to look for in each.",[pdfL(130,165)]],["Read your company's annual report","Read the chairman's letter, Management Discussion & Analysis and the corporate governance report. Write 5 findings.",[L("Read","Optional extra: Varsity Fundamental Analysis ch 1–3",U.var3)]]],
+ [["Financial statements","Video on the P&L, balance sheet and cash flow statement.",[vV,vRR]],["Book: Basics of Financial Statements + tools","Read PDF pages 166–185: income statement, balance sheet, cash flow; Screener, Ticker and Morningstar.",[pdfL(166,185)]],["Your company's 3 statements","On Screener: 5-year revenue and profit growth, total debt, and cash from operations vs net profit.",[scr,L("Read","Optional extra: Varsity Fundamental Analysis ch 4–8",U.var3)]]],
+ [["Analysing a business","Video on qualitative analysis: products, moat, management.",[vV,vRR]],["Book: How to Analyze a Company","Read PDF pages 186–213: products and services, industry research, competitive advantage, management background.",[pdfL(186,213)]],["Story-side analysis","Write one page on your company: products, customers, industry size and outlook, competitive edge, promoter holding and pay.",[scr]]],
+ [["Financial ratios","Video on the key ratios.",[vV,vRR]],["Book: Financial Ratios","Read PDF pages 214–249: solvency, efficiency, profitability and cash flow ratios, common sizing, KPIs, shareholding.",[pdfL(214,249)]],["Ratios for 2 companies","Compute debt-to-equity, interest coverage, asset turnover, EBIT margin, ROE, ROCE and free cash flow for your company and one peer.",[scr,L("Read","Optional extra: Varsity Fundamental Analysis ch 9–11",U.var3)]]],
+ [["Valuation basics","Video on P/E, P/B and EV/EBITDA.",[vV,vRR]],["Book: How to Value Stocks + Relative Valuation","Read PDF pages 250–273: what valuation is, market and stock valuation ratios, KPI-based valuation, valuation bands.",[pdfL(250,273)]],["Relative valuation","Compare your company's P/E, P/B and EV/EBITDA with peers and with its own 5-year range.",[scr]]],
+ [["DCF","Video on discounted cash flow.",[vV,vRR]],["Book: Absolute Valuation + Exit Multiple","Read PDF pages 274–287: DCF, its problems, relative vs absolute, the exit multiple approach.",[pdfL(274,287)]],["Simple DCF + exit multiple","Do a simple DCF and an exit-multiple estimate for your company.",[scr,L("Read","Optional extra: Varsity Fundamental Analysis ch 12–16",U.var3)]]]
+];
+
+/* ---------- Vacation sprint, per date ---------- */
+const VAC={
+ "2026-12-21":{am:["SQL video","Views, CTAS and temporary tables",[]],block:["video + views practice","Watch the next 75 minutes of the course, then create 2 views and 1 temp table on the course database.",[]],stock:["Write your stock checklist","Turn your draft into a final checklist: business, growth, profitability, debt, cash flow, management, valuation.",[r3]],app:"tests"},
+ "2026-12-22":{am:["SQL video (finish the course)","Stored procedures, triggers, indexes, partitions, performance tips",[]],block:["Procedures, triggers, cleanup problems","Write 1 stored procedure and 1 trigger on the course database, then solve:",[lc("delete-duplicate-emails"),lc("list-the-products-ordered-in-a-period")]],stock:["Company analysis 1: the business","Choose a sector and 3 companies in it. For company A: what it sells, who buys, competitors, risks.",[scr]],app:"tests"},
+ "2026-12-23":{am:["Indexes and execution plans","Read the first chapters of Use The Index, Luke. Learn clustered vs non-clustered indexes.",[L("Read","Use The Index, Luke",U.luke)]],block:["Hard problems","Interview-style hard problems. Try each for 25 minutes before looking at a solution.",[lc("product-sales-analysis-iii"),lc("trips-and-users"),lc("human-traffic-of-stadium")]],stock:["Company A: 5-year financials","Growth, margins, ROE/ROCE, debt, cash flow. Fill your checklist.",[scr]],app:"tests"},
+ "2026-12-24":{am:["Normalization and keys","1NF, 2NF, 3NF, primary / foreign keys. Be ready to explain with an example.",[L("Read","Database normalization basics",U.norm)]],block:["FAANG-style SQL","DataLemur free Medium questions from big-tech companies. Aim for 4.",[L("Practice","DataLemur questions",U.datalemur)]],stock:["Company A: valuation","Compare P/E with peers; run a simple DCF using Varsity ch 14.",[r3,scr]],app:"tests"},
+ "2026-12-26":{stock:["Company B: financials","Repeat the checklist for company B.",[scr]],app:"docker"},
+ "2026-12-27":{sun:["Transactions and isolation levels","ACID, transactions, isolation levels (read committed, repeatable read, serializable). Then redo 2 problems from memory.",[L("Read","Transaction isolation levels",U.iso),lc("department-top-three-salaries"),lc("consecutive-numbers")]],stock:["Company C: financials","Repeat the checklist for company C.",[scr]]},
+ "2026-12-28":{am:["Interview theory review","Explain out loud: joins vs subqueries, WHERE vs HAVING, RANK vs DENSE_RANK, DELETE vs TRUNCATE, UNION vs UNION ALL.",[]],block:["Mock interview 1 (timed)","45 minutes, 4 problems, no hints. Then review mistakes.",[lc("department-top-three-salaries"),lc("restaurant-growth"),lc("game-play-analysis-iv"),lc("trips-and-users")]],stock:["Compare A, B, C","Put all three companies in one table. Which is strongest, and why?",[scr]],app:"docker"},
+ "2026-12-29":{am:["Query performance","Read an execution plan for 2 of your queries. Add an index and compare.",[L("Read","Use The Index, Luke",U.luke)]],block:["Mock interview 2 (timed)","45 minutes, 4 problems, no hints.",[lc("human-traffic-of-stadium"),lc("friend-requests-ii-who-has-the-most-friends"),lc("exchange-seats"),lc("customers-who-bought-all-products")]],stock:null,app:"docker"},
+ "2026-12-30":{am:["SQL cheat sheet","Write a 2-page cheat sheet: join types, window function patterns, CTE templates, date functions, NULL handling.",[]],block:["DataLemur + redo weakest","3 more DataLemur Medium questions, then redo the 2 problems you found hardest this month.",[L("Practice","DataLemur questions",U.datalemur)]],stock:["One-page investment note","Write a one-page note on your top pick: business, numbers, valuation, risks. Practice only, not a buy decision.",[]],app:"readme"},
+ "2026-12-31":{am:["Final SQL review","Read your cheat sheet. Re-explain normalization, indexes, ACID and isolation levels without notes.",[]],block:["Final mock","3 problems you have not seen, 30 minutes. You're done with SQL basics.",[L("Practice","LeetCode Top SQL 50 (any left)",U.lcsql),L("Practice","DataLemur questions",U.datalemur)]],stock:["Review and plan","Re-read all stock notes. Write the open questions you want to study in January.",[]],app:"readme"}
+};
+
+const VSTK={
+ "2026-12-21":["Book: When to Buy","Read PDF pages 288–307: what price to buy at, investment philosophies, your hypothesis, tracking KPIs. Write notes.",[pdfL(288,307)]],
+ "2026-12-22":["Book: When to Sell + Market Cycles","Read PDF pages 308–337: when to sell, market and business cycles, market psychology.",[pdfL(308,337)]],
+ "2026-12-23":["Book: Portfolio, 10X & 100X, the checklist","Read PDF pages 338–357. Use the book's Equity Research Checklist (pages 353–355) to write your own checklist.",[pdfL(338,357)]],
+ "2026-12-24":["Company A: full checklist","Run your checklist on your practice company: story side and financials.",[scr]],
+ "2026-12-26":["Company A: valuation","Relative valuation, DCF and exit multiple. At what price would it be attractive?",[scr,pdfL(250,287)]],
+ "2026-12-27":["Companies B and C","Run your checklist quickly on two peers in the same sector.",[scr]],
+ "2026-12-28":["Compare A, B, C","Put all three in one table. Which is strongest, and why?",[scr]],
+ "2026-12-29":["Your investment hypothesis","For your top pick, write \"I am making this investment because…\" and the KPIs you would track (PDF pages 302–307).",[pdfL(302,307)]],
+ "2026-12-30":["One-page investment note","Business, numbers, valuation, risks, when you would sell. Practice only, not a buy decision.",[]],
+ "2026-12-31":["Review and plan","Re-read all stock notes. Write the open questions for January.",[]]
+};
+for(const k in VSTK)VAC[k].stock=VSTK[k];
+
+/* ---------- Other topics (lighter pace) ---------- */
+const WED={
+ "2026-10-14":["C# basics (video part 1)","Setup, variables, data types, strings, numbers, user input.",{url:U.csv,name:"Mike Dane C# course",from:0,to:90,speed:"1.5x"},[L("Read","A tour of C#",U.ms+"dotnet/csharp/tour-of-csharp/")]],
+ "2026-10-21":["C# basics (video part 2)","Arrays, methods, if / switch, loops, 2D arrays, exceptions.",{url:U.csv,name:"Mike Dane C# course",from:90,to:180,speed:"1.5x"},[]],
+ "2026-10-28":["C# OOP (video part 3)","Classes, objects, constructors, getters & setters, static, inheritance.",{url:U.csv,name:"Mike Dane C# course",from:180,to:null,speed:"1.5x"},[L("Read","Object-oriented C#",U.ms+"dotnet/csharp/fundamentals/tutorials/oop")]],
+ "2026-11-04":["What .NET is","Runtime, SDK, dotnet CLI, NuGet. Create and run a console app from the CLI.",null,[L("Read","Introduction to .NET",U.ms+"dotnet/core/introduction"),L("Video",".NET beginner videos",U.dnvid)]],
+ "2026-11-11":[".NET Conf 2026 (Nov 10–13)","Watch the keynote highlights: what's new in .NET 11.",null,[L("Video",".NET YouTube channel",U.dnyt)]],
+ "2026-11-18":["Generics and collections","List, Dictionary, HashSet, generic methods and classes.",null,[L("Read","Generics in C#",U.ms+"dotnet/csharp/fundamentals/types/generics")]],
+ "2026-11-25":["LINQ","Where, Select, GroupBy, Join, OrderBy. Rewrite 3 SQL queries you know as LINQ.",null,[L("Read","LINQ overview",U.ms+"dotnet/csharp/linq/")]],
+ "2026-12-02":["async / await","Tasks, async methods, why they matter for web APIs.",null,[L("Read","Asynchronous programming",U.ms+"dotnet/csharp/asynchronous-programming/")]],
+ "2026-12-09":["ASP.NET Core fundamentals","Middleware pipeline, dependency injection, configuration.",null,[L("Read","ASP.NET Core fundamentals",U.ms+"aspnet/core/fundamentals/")]],
+ "2026-12-16":["Your first Web API","Follow the tutorial end to end. Next in January: EF Core, auth, testing.",null,[L("Read","Tutorial: create a Web API",U.ms+"aspnet/core/tutorials/first-web-api")]]
+};
+const THU={
+ "2026-10-15":["Angular 1: intro + TypeScript","Course intro and the TypeScript section.",{url:U.ng,name:"freeCodeCamp Angular course",from:0,to:90,speed:"1.5x"},[L("Read","TypeScript in 5 minutes",U.ts)]],
+ "2026-10-22":["OS 1: what an OS does","Introduction, OS structure, system calls.",null,[L("Video","Neso Academy OS playlist (first 5 videos)",U.os),L("Read","OSTEP: Introduction",U.ostep)]],
+ "2026-10-29":["Angular 2: installation and basics","CLI, project structure, components, data binding.",{url:U.ng,name:"freeCodeCamp Angular course",from:90,to:180,speed:"1.5x"},[L("Read","angular.dev tutorial lessons 1–4",U.ngtut)]],
+ "2026-11-05":["OS 2: processes","Process states, PCB, context switching.",null,[L("Video","Neso Academy OS playlist (next 5 videos)",U.os),L("Read","OSTEP: the process",U.ostep)]],
+ "2026-11-12":["Angular 3: components in depth","Lifecycle hooks and component communication.",{url:U.ng,name:"freeCodeCamp Angular course",from:180,to:270,speed:"1.5x"},[L("Read","Angular components guide",U.ngd+"components")]],
+ "2026-11-19":["OS 3: threads","Threads, multithreading models.",null,[L("Video","Neso Academy OS playlist (next 5 videos)",U.os),L("Read","OSTEP: concurrency intro",U.ostep)]],
+ "2026-11-26":["Angular 4: dependency injection","Services and DI.",{url:U.ng,name:"freeCodeCamp Angular course",from:270,to:360,speed:"1.5x"},[L("Read","Angular DI guide",U.ngd+"di")]],
+ "2026-12-03":["OS 4: CPU scheduling","FCFS, SJF, priority, round robin.",null,[L("Video","Neso Academy OS playlist (next 5 videos)",U.os),L("Read","OSTEP: scheduling",U.ostep)]],
+ "2026-12-10":["Angular 5: HttpClient and RxJS","Calling APIs, Observables. Continues in January from 7:30:00.",{url:U.ng,name:"freeCodeCamp Angular course",from:360,to:450,speed:"1.5x"},[L("Read","Angular HTTP guide",U.ngd+"http")]],
+ "2026-12-17":["OS 5: synchronization","Critical section, mutex, semaphores. Deadlocks and memory continue in January.",null,[L("Video","Neso Academy OS playlist (next 5 videos)",U.os),L("Read","OSTEP: locks",U.ostep)]]
+};
+const CLOUD={
+ "2026-10-11":["Set up your notes","Create a notes folder per subject (SQL, Stock, .NET, Angular, OS) and one page per week. Bookmark this calendar.",[]],
+ "2026-10-18":["Cloud 1: cloud concepts","What cloud is; IaaS, PaaS, SaaS.",[L("Read","AZ-900 Azure Fundamentals",U.az)]],
+ "2026-10-25":["AI 1: what generative AI is","LLMs, tokens, what they can and can't do.",[L("Video","Generative AI for Beginners: lesson 1",U.genai)]],
+ "2026-11-01":["Cloud 2: cloud models","Public, private, hybrid; benefits of cloud.",[L("Read","AZ-900 Azure Fundamentals",U.az)]],
+ "2026-11-08":["AI 2: comparing LLMs, responsible AI","",[L("Video","Generative AI for Beginners: lessons 2–3",U.genai)]],
+ "2026-11-15":[".NET Conf 2026 catch-up","Watch any session you missed this week.",[L("Video",".NET YouTube channel",U.dnyt)]],
+ "2026-11-22":["AI 3: prompt engineering","",[L("Video","Generative AI for Beginners: lesson 4",U.genai)]],
+ "2026-11-29":["Cloud 3: Azure architecture","Regions, availability zones, resource groups, subscriptions.",[L("Read","AZ-900 Azure Fundamentals",U.az)]],
+ "2026-12-06":["AI 4: advanced prompts","",[L("Video","Generative AI for Beginners: lesson 5",U.genai)]],
+ "2026-12-13":["Cloud 4: compute and networking","VMs, App Service, containers, virtual networks.",[L("Read","AZ-900 Azure Fundamentals",U.az)]],
+ "2026-12-20":["AI 5: text generation apps","",[L("Video","Generative AI for Beginners: lesson 6",U.genai)]],
+ "2026-12-27":["Year review","What you learned since October; set January goals for .NET, Angular, OS, Docker.",[]]
+};
+
+/* ---------- Finance Manager App milestones (by week) ---------- */
+const APPW=[
+ null,
+ ["Plan the app","Write the feature list (income, expenses, categories, budgets, reports). Sketch the screens. Design tables: Users, Accounts, Categories, Transactions, Budgets."],
+ ["Create the database","Create the tables in SQL Server with primary keys, foreign keys and constraints. Insert seed data. Uses the DDL / DML you're learning."],
+ ["Web API: transactions","Create the .NET Web API project. Build CRUD endpoints for transactions."],
+ ["Web API: categories & budgets","Endpoints for categories and budgets. Add validation and error handling."],
+ ["Angular shell","Create the Angular app: layout, routing, navigation."],
+ ["Transactions screen","List, add and edit transactions; connect to the API."],
+ ["Dashboard","Monthly totals by category using GROUP BY queries."],
+ ["Reports","Running balance and month-over-month change using window functions."],
+ ["Login","Sign-in and per-user data."],
+ ["Polish","Charts, CSV import, small UI fixes."]
+];
+const APPV={tests:["Tests and bug fixes","Write unit tests for the API and fix the bugs you find."],docker:["Run it with Docker","Follow Docker's get-started guide; run API + database with Docker Compose.",[L("Read","Docker: get started",U.dockdocs)]],readme:["Ship it","Write a README with screenshots and push the project to GitHub. Demo it to yourself on Dec 31."]};
+
+/* ---------- DSA: 2 a day, in order ---------- */
+const DSA_GROUPS=[
+ ["Arrays & hashing",["two-sum","contains-duplicate","valid-anagram","best-time-to-buy-and-sell-stock","plus-one","move-zeroes","majority-element","ransom-note","remove-duplicates-from-sorted-array","first-unique-character-in-a-string","isomorphic-strings","find-all-numbers-disappeared-in-an-array","maximum-subarray","group-anagrams","top-k-frequent-elements","product-of-array-except-self","valid-sudoku","longest-consecutive-sequence"]],
+ ["Two pointers & sliding window",["reverse-string","valid-palindrome","merge-sorted-array","squares-of-a-sorted-array","is-subsequence","two-sum-ii-input-array-is-sorted","maximum-average-subarray-i","3sum","container-with-most-water","longest-substring-without-repeating-characters","minimum-size-subarray-sum","longest-repeating-character-replacement","permutation-in-string","trapping-rain-water"]],
+ ["Stack & binary search",["valid-parentheses","binary-search","search-insert-position","first-bad-version","min-stack","evaluate-reverse-polish-notation","daily-temperatures","generate-parentheses","search-a-2d-matrix","koko-eating-bananas","find-minimum-in-rotated-sorted-array","search-in-rotated-sorted-array","time-based-key-value-store","car-fleet"]],
+ ["Linked lists",["reverse-linked-list","merge-two-sorted-lists","linked-list-cycle","middle-of-the-linked-list","remove-linked-list-elements","palindrome-linked-list","intersection-of-two-linked-lists","remove-nth-node-from-end-of-list","reorder-list","add-two-numbers","copy-list-with-random-pointer","find-the-duplicate-number","lru-cache","merge-k-sorted-lists"]],
+ ["Trees",["binary-tree-inorder-traversal","binary-tree-preorder-traversal","maximum-depth-of-binary-tree","invert-binary-tree","same-tree","symmetric-tree","minimum-depth-of-binary-tree","path-sum","diameter-of-binary-tree","balanced-binary-tree","subtree-of-another-tree","average-of-levels-in-binary-tree","binary-tree-level-order-traversal","binary-tree-right-side-view"]],
+ ["BST & tries",["search-in-a-binary-search-tree","insert-into-a-binary-search-tree","convert-sorted-array-to-binary-search-tree","lowest-common-ancestor-of-a-binary-search-tree","validate-binary-search-tree","kth-smallest-element-in-a-bst","count-good-nodes-in-binary-tree","path-sum-ii","lowest-common-ancestor-of-a-binary-tree","construct-binary-tree-from-preorder-and-inorder-traversal","implement-trie-prefix-tree","design-add-and-search-words-data-structure","binary-tree-maximum-path-sum","serialize-and-deserialize-binary-tree"]],
+ ["Heaps & greedy",["kth-largest-element-in-a-stream","last-stone-weight","k-closest-points-to-origin","kth-largest-element-in-an-array","task-scheduler","design-twitter","find-median-from-data-stream","jump-game","jump-game-ii","gas-station","hand-of-straights","merge-triplets-to-form-target-triplet","partition-labels","valid-parenthesis-string"]],
+ ["Backtracking",["subsets","combinations","permutations","letter-case-permutation","combination-sum","combination-sum-iii","letter-combinations-of-a-phone-number","subsets-ii","permutations-ii","combination-sum-ii","word-search","palindrome-partitioning","restore-ip-addresses","n-queens"]],
+ ["Graphs",["flood-fill","island-perimeter","find-if-path-exists-in-graph","number-of-islands","max-area-of-island","keys-and-rooms","number-of-provinces","clone-graph","rotting-oranges","01-matrix","surrounded-regions","pacific-atlantic-water-flow","course-schedule","course-schedule-ii"]],
+ ["Advanced graphs",["find-the-town-judge","all-paths-from-source-to-target","is-graph-bipartite","redundant-connection","number-of-operations-to-make-network-connected","accounts-merge","minimum-height-trees","evaluate-division","network-delay-time","path-with-minimum-effort","min-cost-to-connect-all-points","cheapest-flights-within-k-stops","swim-in-rising-water","word-ladder"]],
+ ["Dynamic programming",["fibonacci-number","n-th-tribonacci-number","climbing-stairs","min-cost-climbing-stairs","house-robber","house-robber-ii","longest-palindromic-substring","palindromic-substrings","decode-ways","coin-change","maximum-product-subarray","word-break","longest-increasing-subsequence","partition-equal-subset-sum","unique-paths","minimum-path-sum","unique-paths-ii","longest-common-subsequence","coin-change-ii","target-sum","edit-distance","best-time-to-buy-and-sell-stock-with-cooldown"]]
+];
+const DSA=[];DSA_GROUPS.forEach(([t,list])=>list.forEach(s=>DSA.push({s,t})));
+
+/* ---------- build one day ---------- */
+const S=(t1,t2,c,title,d)=>({t1,t2,c,title,...(d||{})});
+const weekNo=k=>k<"2026-10-12"?0:Math.floor((D(k)-D("2026-10-12"))/864e5/7)+1;
+const dayIdx=k=>Math.round((D(k)-D(START))/864e5);
+function sqlVideoSlot(t1,t2,k,slot,topic){
+  const w=sqlWatch(k,slot);
+  return S(t1,t2,"study","SQL: video",{sub:topic,d:"Code along in SSMS. Pause and type every query yourself; that's where it sticks. Write a 3-line summary in your SQL notes at the end.",watch:{url:U.baraa,name:"Data with Baraa SQL course",from:w.from,to:w.to,speed:"1.25x"},topic:"Topics you'll reach: "+topic});
+}
+function dsaSlot(t1,t2,k){
+  const i=dayIdx(k)*2,p=[DSA[i],DSA[i+1]].filter(Boolean);
+  return S(t1,t2,"dsa","DSA: 2 problems",{sub:p[0]?p[0].t:"",d:"Give each problem 20–25 minutes. Stuck? Watch the NeetCode video for it, then close it and write the code yourself. Log the pattern you used.",links:[...p.map(x=>lc(x.s)),L("Video","NeetCode solutions",U.neet)]});
+}
+const walk=(t1,t2)=>S(t1,t2,"health","Walk",{d:"30 minutes, inside your 6:45–8:00 window. No phone; let the morning's topic settle."});
+const duo=(t1,t2)=>S(t1,t2,"lang","Duolingo",{d:"One lesson at least; keep the streak alive.",links:[L("App","Duolingo",U.duo)]});
+const chess=(t1,t2,long)=>S(t1,t2,"chess","Chess",{d:long?"One longer game (15+10), then review your mistakes with the analysis board.":"One rapid game or 10 puzzles.",links:[L("Practice","Chess.com puzzles",U.chess),L("Practice","Lichess puzzles",U.lichess)]});
+const dinner=()=>S("20:30","21:00","life","Dinner",{d:"Can stretch to 9:15; cut the screen time after it, not your sleep."});
+const sleep=(t)=>[S(t||"21:45","22:00","life","Wind down",{d:"Screens off, lay out tomorrow."}),S("22:00","","life","Sleep",{d:"7.5 hours before a 5:30 alarm."})];
+function appSlot(t1,t2,k,big){
+  let m;
+  if(k>=VAC_FROM){const v=APPV[(VAC[k]||{}).app||"readme"];m=[v[0],v[1],v[2]];}
+  else{const a=APPW[weekNo(k)];if(!a)return S(t1,t2,"app","Finance Manager App",{d:"Free session."});m=[a[0],a[1]];}
+  return S(t1,t2,"app","Finance Manager App",{sub:m[0],d:(big?"Big build session. ":"One small piece of this week's milestone. ")+"This week: "+m[1],links:m[2]||[],flex:big?"":"Office work at home? It takes this slot."});
+}
+function stockSlot(t1,t2,item,label){
+  return S(t1,t2,"stock","Stock market: "+label,{sub:item[0],d:item[1],links:item[2]});
+}
+
+function buildDay(k){
+  const d=D(k),dow=d.getDay(),w=weekNo(k),vac=k>=VAC_FROM,hol=k===HOLIDAY;
+  const sq=SQLW[Math.min(w,10)],st=STKW[Math.min(w,10)];
+  let slots=[],kind,focus;
+  if(hol){
+    kind="Christmas · rest day";focus="Rest day. Keep the habits only: walk, DSA, Duolingo, chess.";
+    slots=[S("06:00","06:10","life","Wake up",{d:"No alarm pressure today."}),dsaSlot("06:10","06:45",k),walk("06:45","07:15"),S("07:15","08:00","life","Breakfast"),S("08:00","13:00","fun","Christmas: family / friends",{d:"No study."}),S("13:00","14:00","life","Lunch"),S("14:00","17:00","fun","Free time"),duo("17:00","17:15"),chess("17:15","17:45",true),S("17:45","20:30","fun","Free time / celebrations"),dinner(),S("21:00","21:45","fun","Movie"),...sleep()];
+  } else if(dow===6){
+    kind=vac?"Vacation · Saturday":"Saturday";
+    const stk=vac?VAC[k].stock:st[1];
+    focus="Shopping in the morning, stock market reading, big app session after lunch.";
+    slots=[S("06:00","06:10","life","Wake up"),dsaSlot("06:10","06:45",k),walk("06:45","07:15"),S("07:15","08:00","life","Breakfast"),S("08:00","08:45","life","Get ready / shopping list"),S("08:45","11:00","life","Shopping & errands",{d:"Out early to beat traffic. Usually back by 10; if so, start the stock reading early. No shopping this week? Free time."}),
+      stk?stockSlot("11:00","12:00",stk,vac?"practice":"reading"):S("11:00","12:00","life","Free time"),
+      S("12:00","13:00","life","Rest / free time"),S("13:00","14:00","life","Lunch"),appSlot("14:00","17:00",k,true),duo("17:00","17:15"),chess("17:15","17:45",true),S("17:45","19:00","life","Free time / family"),S("19:00","20:30","fun","Movie / series",{d:"Pause for dinner."}),dinner(),S("21:00","21:45","fun","Finish the movie / one more episode"),...sleep()];
+  } else if(dow===0){
+    kind=vac?"Vacation · Sunday":"Sunday";
+    const vv=VAC[k]||{};
+    const stk=vac?vv.stock:st[2];
+    const sqlA=[];
+    const hasVid=sqlWatch(k,"sun");
+    if(hasVid){
+      sqlA.push(sqlVideoSlot("08:00","09:00",k,"sun",sq[0]));
+      sqlA.push(S("09:00","10:00","study","SQL: practice",{sub:sq[0],d:"Solve these after the video. Write each solution in your notes with one line on the trick it used.",links:sq[2]}));
+    } else if(vv.sun){
+      sqlA.push(S("08:00","10:00","study","SQL: "+vv.sun[0],{d:vv.sun[1],links:vv.sun[2]}));
+    }
+    const cl=CLOUD[k];
+    focus=hasVid?"SQL video + practice, Cloud/AI, stock market practice, then gaming.":"SQL interview prep, stock market practice, then gaming.";
+    slots=[S("06:00","06:10","life","Wake up"),dsaSlot("06:10","06:45",k),walk("06:45","07:15"),S("07:15","08:00","life","Breakfast"),...sqlA,
+      cl?S("10:00","10:45","study",cl[0].startsWith("Set up")||cl[0].startsWith("Year")?cl[0]:"Cloud / AI",{sub:cl[0],d:cl[1]||"Watch the lesson video, then skim the lesson page.",links:cl[2]}):S("10:00","10:45","life","Free"),
+      stk?stockSlot("10:45","12:30",stk,vac?"practice":"notes & practice"):S("10:45","12:30","life","Free time"),
+      S("12:30","13:00","life","Rest"),S("13:00","14:00","life","Lunch"),S("14:00","17:30","fun","PC gaming",{d:"Story or action game."}),S("17:30","18:15","study","Weekly review",{d:"Tick off what got done this week, re-read your notes, look at next week in this calendar."}),duo("18:15","18:30"),chess("18:30","19:00",true),S("19:00","19:30","life","Free time / backup errands"),S("19:30","20:30","fun","Series / social media"),dinner(),S("21:00","21:45","fun","Series / social media"),...sleep()];
+  } else if(vac){
+    kind="Vacation · study sprint";const v=VAC[k];
+    focus="Sprint: SQL in the morning, stock market late morning, afternoon free.";
+    const am=sqlWatch(k,"am")?sqlVideoSlot("05:40","06:45",k,"am",v.am[1]):S("05:40","06:45","study","SQL: "+v.am[0],{d:v.am[1],links:v.am[2]});
+    const blk=sqlWatch(k,"block")?Object.assign(sqlVideoSlot("08:45","10:30",k,"block","Views, CTAS, temp tables"),{title:"SQL: "+v.block[0],d:v.block[1]}):S("08:45","10:30","study","SQL: "+v.block[0],{d:v.block[1],links:v.block[2]});
+    slots=[S("05:30","05:40","life","Wake up"),am,walk("06:45","07:15"),dsaSlot("07:15","07:55",k),S("07:55","08:45","life","Breakfast & break"),blk,S("10:30","10:45","life","Break"),stockSlot("10:45","12:15",v.stock,"deep practice"),S("12:15","13:00","life","Rest"),S("13:00","14:00","life","Lunch"),S("14:00","17:00","fun","Free afternoon",{d:"Rest, family, go out, or gaming."}),duo("17:00","17:15"),chess("17:15","17:45",true),S("17:45","19:00","life","Free time"),appSlot("19:00","20:30",k,true),dinner(),S("21:00","21:45","fun",k==="2026-12-31"?"New Year's Eve":"Movies / series",{d:k==="2026-12-31"?"Stay up for midnight if you like; the plan ends here.":""}),...(k==="2026-12-31"?[]:sleep())];
+  } else {
+    kind="Workday";
+    let am;
+    if(dow===1){am=sqlVideoSlot("05:40","06:45",k,"am",sq[0]);focus="SQL video morning.";}
+    else if(dow===2){am=S("05:40","06:45","study","SQL: practice",{sub:sq[0],d:"Practice what Monday's video covered. Write each solution in your notes.",links:sq[1]});focus="SQL practice morning.";}
+    else if(dow===3){const x=WED[k];am=x?S("05:40","06:45","study",".NET: "+x[0],{d:x[1],watch:x[2],links:x[3]}):S("05:40","06:45","study",".NET");focus=".NET morning (lighter track).";}
+    else if(dow===4){const x=THU[k];am=x?S("05:40","06:45","study",x[0],{d:x[1],watch:x[2],links:x[3]}):S("05:40","06:45","study","Angular / OS");focus=(x&&x[0].startsWith("OS")?"Operating systems":"Angular")+" morning (lighter track).";}
+    else {am=stockSlot("05:40","06:45",st[0],"video");focus="Stock market video morning.";}
+    slots=[S("05:30","05:40","life","Wake up",{d:"Water, no phone for 10 minutes. Up at 5? Start studying earlier."}),am,walk("06:45","07:15"),dsaSlot("07:15","07:55",k),S("07:55","08:30","life","Get ready & breakfast"),S("08:30","09:00","life","Commute"),S("09:00","18:00","work","Office"),S("18:00","18:45","life","Commute, freshen up, snack"),duo("18:45","19:00"),
+      dow===5?S("19:00","20:10","fun","Series / social media",{d:"Weekend starts. No app work tonight."}):appSlot("19:00","20:10",k,false),
+      chess("20:10","20:30"),dinner(),S("21:00","21:45","fun","Movies, series, social media"),...sleep()];
+  }
+  slots.forEach((s,i)=>s.id=k+"#"+i);
+  return {k,kind,focus,slots,vac:vac||hol};
+}
+
+/* ---------- state ---------- */
+let done={};try{done=JSON.parse(localStorage.getItem("plan-done")||"{}")}catch(e){}
+const save=()=>{try{localStorage.setItem("plan-done",JSON.stringify(done))}catch(e){}};
+const progress=k=>{const t=buildDay(k).slots.filter(s=>TRACK.includes(s.c));const n=t.filter(s=>done[s.id]).length;return[n,t.length]};
+
+/* ---------- render: calendar ---------- */
+const MONTHS=[[2026,9],[2026,10],[2026,11]];
+const todayK=K(new Date());
+let selK=todayK>=START&&todayK<=END?todayK:START;
+let curM=Math.max(0,MONTHS.findIndex(([y,m])=>D(selK).getMonth()===m));
+const DOTS=k=>{const d=D(k),w=d.getDay();if(k===HOLIDAY)return["fun"];if(k>=VAC_FROM)return w===0||w===6?["study","stock"]:["study","stock","app"];return w===6?["stock","app"]:w===0?["study","stock"]:w===5?["stock"]:["study","app"]};
+function tagFor(k){
+  const d=D(k),w=d.getDay();
+  if(k===HOLIDAY)return"Christmas";
+  if(k>=VAC_FROM&&w>0&&w<6)return"Sprint: SQL + stock";
+  if(w===0)return sqlWatch(k,"sun")?"SQL + stock":"SQL prep + stock";
+  if(w===6)return"Shopping, stock, app";
+  if(w===1)return"SQL video";if(w===2)return"SQL practice";if(w===3)return".NET";
+  if(w===4){const x=THU[k];return x?(x[0].startsWith("OS")?"OS":"Angular"):"";}
+  return"Stock video";
+}
+function renderCal(){
+  const [y,m]=MONTHS[curM];
+  document.getElementById("mtitle").textContent=new Date(y,m,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+  document.querySelectorAll("#mtabs .btn").forEach((b,i)=>b.setAttribute("aria-pressed",i===curM));
+  let h=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(x=>`<div class="dow">${x}</div>`).join("");
+  const first=new Date(y,m,1),lead=(first.getDay()+6)%7,days=new Date(y,m+1,0).getDate();
+  for(let i=0;i<lead;i++)h+=`<div class="cell blank" aria-hidden="true"></div>`;
+  for(let n=1;n<=days;n++){
+    const k=K(new Date(y,m,n)),inPlan=k>=START&&k<=END;
+    if(!inPlan){h+=`<div class="cell off"><span class="n">${n}</span>${k===todayK?'<span class="tag">Today · plan starts tomorrow</span>':""}</div>`;continue;}
+    const [a,b]=progress(k);
+    const cls=["cell",(k>=VAC_FROM)?"vac":"",k===todayK?"today":""].join(" ");
+    h+=`<button class="${cls}" data-k="${k}" aria-pressed="${k===selK}" aria-label="${D(k).toDateString()}: ${esc(tagFor(k))}"><span class="n">${n}</span><span class="tag">${esc(tagFor(k))}</span><span class="dots">${DOTS(k).map(c=>`<i style="--cat:var(${CAT[c][1]})"></i>`).join("")}</span><span class="bar"><i style="width:${b?a/b*100:0}%"></i></span></button>`;
+  }
+  document.getElementById("grid").innerHTML=h;
+}
+document.getElementById("mtabs").innerHTML=MONTHS.map(([y,m],i)=>`<button class="btn" data-m="${i}">${new Date(y,m,1).toLocaleDateString("en-IN",{month:"short"})}</button>`).join("");
+document.getElementById("mtabs").addEventListener("click",e=>{const b=e.target.closest(".btn");if(b){curM=+b.dataset.m;renderCal()}});
+document.getElementById("grid").addEventListener("click",e=>{const c=e.target.closest("button.cell");if(!c)return;selK=c.dataset.k;renderCal();renderDay();if(window.matchMedia("(max-width:900px)").matches)document.getElementById("day").scrollIntoView({behavior:"smooth",block:"start"})});
+
+/* ---------- render: day ---------- */
+let pdfURL=null;
+function linkHtml([k,l,u]){
+  if(u&&u.startsWith("pdf:")){
+    const p=u.slice(4);
+    return `<li><span class="kind">PDF</span>${pdfURL?`<a class="pdfa" href="${pdfURL}#page=${p}" target="_blank" rel="noopener">${esc(l)}</a>`:`<span class="pdfa">${esc(l)}</span> <span class="muted">(load your PDF at the top to open it here)</span>`}</li>`;
+  }
+  return `<li><span class="kind">${esc(k)}</span>${u?`<a href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`:esc(l)}</li>`;
+}
+function slotHtml(s){
+  const [lab,col]=CAT[s.c];const tr=TRACK.includes(s.c);
+  let b="";
+  if(s.topic)b+=`<p><b>${esc(s.topic)}</b></p>`;
+  if(s.watch){const w=s.watch;b+=`<div class="watch"><span class="kind">Watch</span><a href="${w.url}" target="_blank" rel="noopener">${esc(w.name)}</a> from <b>${hms(w.from)}</b> to <b>${w.to==null?"the end":hms(w.to)}</b> at ${w.speed}. If a chapter ends a few minutes later, finish it and note where you stopped.</div>`;}
+  if(s.d)b+=`<p>${esc(s.d)}</p>`;
+  if(s.links&&s.links.length)b+=`<ul class="probs">${s.links.map(linkHtml).join("")}</ul>`;
+  if(s.flex)b+=`<p class="muted">${esc(s.flex)}</p>`;
+  if(!b)b=`<p class="muted">${s.c==="work"?"Office hours.":"Nothing to prepare."}</p>`;
+  const cid="t-"+s.id.replace(/[^\w-]/g,"_");
+  const tick=tr?`<label class="tick" for="${cid}" title="Tick when done, untick to clear"><input type="checkbox" id="${cid}" data-id="${s.id}" ${done[s.id]?"checked":""} aria-label="Done: ${esc(s.title)}"></label>`:`<span class="tick none" aria-hidden="true"></span>`;
+  return `<div class="row">${tick}<details class="slot${done[s.id]?" done":""}" style="--cat:var(${col})"><summary><span class="time">${fmtT(s.t1)}${s.t2?" – "+fmtT(s.t2):""}</span><span class="what">${esc(s.title)}${s.sub?`<small>${esc(s.sub)}</small>`:""}</span><span class="chev" aria-hidden="true">›</span></summary><div class="body">${b}</div></details></div>`;
+}
+function renderDay(){
+  const day=buildDay(selK),[a,b]=progress(selK);
+  const dt=D(selK).toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"});
+  document.getElementById("day").innerHTML=`<div class="dayhead"><h2>${dt}</h2><span class="pill${day.vac?" vac":""}">${esc(day.kind)}</span></div><div class="focus"><b>Focus:</b> ${esc(day.focus)} <span class="muted" id="daycount">· ${a} of ${b} tasks done</span></div><div class="tools"><button class="btn ghost" data-act="all">Tick all</button><button class="btn ghost" data-act="clear">Clear this day</button><span class="foot">Tick the box beside a slot when it's done; untick to clear it. Click the slot itself for details.</span></div><div class="slots">${day.slots.map(slotHtml).join("")}</div>`;
+}
+function setDone(id,on){if(on)done[id]=1;else delete done[id]}
+function afterChange(){save();renderCal();renderStats();const [a,b]=progress(selK);const f=document.getElementById("daycount");if(f)f.textContent="· "+a+" of "+b+" tasks done"}
+document.getElementById("day").addEventListener("change",e=>{
+  const id=e.target.dataset.id;if(!id)return;
+  setDone(id,e.target.checked);
+  e.target.closest(".row").querySelector("details").classList.toggle("done",e.target.checked);
+  afterChange();
+});
+document.getElementById("day").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-act]");if(!b)return;
+  const on=b.dataset.act==="all";
+  buildDay(selK).slots.filter(s=>TRACK.includes(s.c)).forEach(s=>setDone(s.id,on));
+  afterChange();renderDay();
+});
+/* reset everything, with an in-page confirm */
+document.getElementById("resetwrap").addEventListener("click",e=>{
+  const w=document.getElementById("resetwrap");
+  if(e.target.id==="resetall"){w.innerHTML=`<span class="confirm">Clear every tick from Oct 11 to Dec 31? <button class="btn" id="resetyes">Yes, clear all</button><button class="btn ghost" id="resetno">Cancel</button></span>`;return}
+  if(e.target.id==="resetyes"){done={};afterChange();renderDay()}
+  if(e.target.id==="resetyes"||e.target.id==="resetno")w.innerHTML=`<button class="btn ghost" id="resetall">Reset all progress</button>`;
+});
+
+/* ---------- your PDF, kept in this browser (IndexedDB) ---------- */
+function idb(){return new Promise((res,rej)=>{try{const r=indexedDB.open("study-plan",1);r.onupgradeneeded=()=>r.result.createObjectStore("files");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(err){rej(err)}})}
+async function idbPut(v){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction("files","readwrite");v?t.objectStore("files").put(v,"book"):t.objectStore("files").delete("book");t.oncomplete=res;t.onerror=()=>rej(t.error)})}
+async function idbGet(){const db=await idb();return new Promise((res,rej)=>{const r=db.transaction("files").objectStore("files").get("book");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function setBook(file){
+  if(pdfURL)URL.revokeObjectURL(pdfURL);
+  pdfURL=file?URL.createObjectURL(file):null;
+  document.getElementById("bookstatus").textContent=file?"Loaded. Page links in the stock market slots now open the book at the right page.":"Not loaded. Every stock market slot still lists the exact PDF pages to read.";
+  document.getElementById("bookclear").hidden=!file;
+  renderDay();
+}
+document.getElementById("bookfile").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;setBook(f);
+  try{await idbPut(f)}catch(err){document.getElementById("bookstatus").textContent="Loaded for this visit. This browser wouldn't save it, so load it again next time."}
+});
+document.getElementById("bookclear").addEventListener("click",async()=>{setBook(null);try{await idbPut(null)}catch(err){}});
+idbGet().then(f=>{if(f)setBook(f)}).catch(()=>{});
+
+/* ---------- header stats, legend, summary, resources ---------- */
+function renderStats(){
+  const from=todayK<START?START:todayK;
+  const left=todayK>END?0:Math.round((D(END)-D(from))/864e5)+1;
+  let tot=0;for(let d=D(START);d<=D(END);d=addDays(d,1)){const[a]=progress(K(d));tot+=a}
+  const sqlDone=SQL_SESS.filter(s=>{const day=buildDay(s.k);return day.slots.some(x=>x.watch&&x.watch.url===U.baraa&&done[x.id])}).length;
+  document.getElementById("stats").innerHTML=`<span>Days in plan: <b>82</b></span><span>Days left: <b>${Math.min(82,left)}</b></span><span>DSA problems: <b>164</b></span><span>SQL video sessions done: <b>${sqlDone} / ${SQL_SESS.length}</b></span><span>Tasks ticked: <b>${tot}</b></span>`;
+}
+document.getElementById("legend").innerHTML=[["study","Tech study (SQL, .NET, Angular, OS)"],["stock","Stock market"],["app","Finance App"],["dsa","DSA"],["fun","Fun / rest"]].map(([c,l])=>`<span><i style="--cat:var(${CAT[c][1]})"></i>${l}</span>`).join("")+`<span><i class="vac"></i>Vacation Dec 21–31</span>`;
+const SUM=[
+ ["SQL to interview depth",["Full 30-hour course, 75 min of video per session at 1.25x, finished Dec 22","Practice every Tuesday and Sunday: SQLBolt → HackerRank → all of LeetCode Top SQL 50","Dec 23–31: classic hard problems, DataLemur big-tech questions, indexes, normalization, ACID, 3 timed mocks"]],
+ ["Stock market: your book, cover to cover",["Stock Investing Mastermind, all 357 pages, one chapter a week on Saturdays (exact PDF pages in each slot)","Friday: a short video on the same topic. Sunday: notes and practice on a real company","Dec 21–23: the last chapters (when to buy / sell, cycles, portfolio, 10X). Dec 24–31: your own checklist, 3 companies analysed, a one-page investment note","Zerodha Varsity as optional extra reading"]],
+ ["DSA every day",["164 LeetCode problems, 2 a day in topic order","Arrays → two pointers → stack → linked lists → trees → heaps → backtracking → graphs → DP","NeetCode video when stuck for 25 minutes"]],
+ ["Lighter tracks (continue in January)",[".NET: C# basics, OOP, LINQ, async, first Web API",
+  "Angular: first 7.5 hours of the course","OS: intro to synchronization; Docker used for the app in the sprint","Cloud / AI: alternate Sundays"]]
+];
+document.getElementById("summary").innerHTML=SUM.map(([h,l])=>`<div class="card"><h3>${h}</h3><ul>${l.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`).join("");
+const RES=[
+ ["SQL",[["Data with Baraa: SQL Full Course (30 h)",U.baraa],["SQLBolt",U.sqlbolt],["LeetCode Top SQL 50",U.lcsql],["HackerRank SQL",U.hrsql],["DataLemur",U.datalemur],["Use The Index, Luke",U.luke]]],
+ ["Stock market",[["Your book: Stock Investing Mastermind (load it at the top)","#"],["Zerodha Varsity",U.varsity],["Varsity: Introduction to Stock Markets",U.var1],["Varsity: Fundamental Analysis",U.var3],["CA Rachana Ranade videos",U.rr],["Screener.in",U.screener]]],
+ ["DSA",[["NeetCode (video solutions)",U.neet],["LeetCode","https://leetcode.com/"],["HackerRank Interview Prep Kit","https://www.hackerrank.com/interview/interview-preparation-kit"]]],
+ [".NET, Angular, OS, Cloud, AI",[["Mike Dane: C# course",U.csv],[".NET beginner videos",U.dnvid],["freeCodeCamp: Angular for Beginners",U.ng],["angular.dev tutorial",U.ngtut],["Neso Academy: Operating Systems",U.os],["OSTEP (free OS book)",U.ostep],["AZ-900 Azure Fundamentals",U.az],["Generative AI for Beginners",U.genai]]]
+];
+document.getElementById("resources").innerHTML=RES.map(([h,ls])=>`<div class="card"><h3>${h}</h3><ul>${ls.map(([l,u])=>`<li>${u==="#"?`<b>${esc(l)}</b>`:`<a href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`}</li>`).join("")}</ul></div>`).join("");
+
+renderCal();renderDay();renderStats();
+</script>
+
+</body>
+</html>
