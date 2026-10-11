@@ -175,7 +175,7 @@ td:first-child{font-weight:600;white-space:nowrap}
     <div class="cards" id="resources"></div>
   </section>
 
-  <div class="tools"><span class="foot">Progress is saved in this browser.</span><span id="resetwrap"><button class="btn ghost" id="resetall">Reset all progress</button></span></div>
+  <div class="tools"><span class="foot" id="syncnote">Progress is saved in this browser.</span><span id="resetwrap"><button class="btn ghost" id="resetall">Reset all progress</button></span></div>
   <p class="foot">Stock market material here is for learning to analyse companies. It is not investment advice.</p>
 </div>
 
@@ -434,7 +434,19 @@ function buildDay(k){
 
 /* ---------- state ---------- */
 let done={};try{done=JSON.parse(localStorage.getItem("plan-done")||"{}")}catch(e){}
-const save=()=>{try{localStorage.setItem("plan-done",JSON.stringify(done))}catch(e){}};
+/* Ticks live in the page's shared database when it's available (synced across devices),
+   otherwise in this browser. One document per date: progress/<YYYY-MM-DD> = {ticks:{"<slot id>":1}} */
+let sharedDb=null;const dirty=new Set();const writing={};
+const dateOf=id=>id.split("#")[0];
+function ticksFor(k){const t={};for(const id in done)if(dateOf(id)===k)t[id]=1;return t}
+function writeDate(k){
+  const run=()=>sharedDb.doc("progress/"+k).set({date:k,ticks:ticksFor(k)});
+  writing[k]=(writing[k]||Promise.resolve()).then(run).catch(()=>new Promise(r=>setTimeout(r,800+Math.random()*800)).then(run)).catch(e=>setSync("error",e));
+}
+const save=()=>{
+  if(sharedDb){dirty.forEach(writeDate);dirty.clear();return}
+  dirty.clear();try{localStorage.setItem("plan-done",JSON.stringify(done))}catch(e){}
+};
 const progress=k=>{const t=buildDay(k).slots.filter(s=>TRACK.includes(s.c));const n=t.filter(s=>done[s.id]).length;return[n,t.length]};
 
 /* ---------- render: calendar ---------- */
@@ -500,7 +512,7 @@ function renderDay(){
   const dt=D(selK).toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"});
   document.getElementById("day").innerHTML=`<div class="dayhead"><h2>${dt}</h2><span class="pill${day.vac?" vac":""}">${esc(day.kind)}</span></div><div class="focus"><b>Focus:</b> ${esc(day.focus)} <span class="muted" id="daycount">· ${a} of ${b} tasks done</span></div><div class="tools"><button class="btn ghost" data-act="all">Tick all</button><button class="btn ghost" data-act="clear">Clear this day</button><span class="foot">Tick the box beside a slot when it's done; untick to clear it. Click the slot itself for details.</span></div><div class="slots">${day.slots.map(slotHtml).join("")}</div>`;
 }
-function setDone(id,on){if(on)done[id]=1;else delete done[id]}
+function setDone(id,on){if(on)done[id]=1;else delete done[id];dirty.add(dateOf(id))}
 function afterChange(){save();renderCal();renderStats();const [a,b]=progress(selK);const f=document.getElementById("daycount");if(f)f.textContent="· "+a+" of "+b+" tasks done"}
 document.getElementById("day").addEventListener("change",e=>{
   const id=e.target.dataset.id;if(!id)return;
@@ -518,7 +530,7 @@ document.getElementById("day").addEventListener("click",e=>{
 document.getElementById("resetwrap").addEventListener("click",e=>{
   const w=document.getElementById("resetwrap");
   if(e.target.id==="resetall"){w.innerHTML=`<span class="confirm">Clear every tick from Oct 11 to Dec 31? <button class="btn" id="resetyes">Yes, clear all</button><button class="btn ghost" id="resetno">Cancel</button></span>`;return}
-  if(e.target.id==="resetyes"){done={};afterChange();renderDay()}
+  if(e.target.id==="resetyes"){Object.keys(done).forEach(id=>dirty.add(dateOf(id)));done={};afterChange();renderDay()}
   if(e.target.id==="resetyes"||e.target.id==="resetno")w.innerHTML=`<button class="btn ghost" id="resetall">Reset all progress</button>`;
 });
 
@@ -566,6 +578,35 @@ const RES=[
 document.getElementById("resources").innerHTML=RES.map(([h,ls])=>`<div class="card"><h3>${h}</h3><ul>${ls.map(([l,u])=>`<li>${u==="#"?`<b>${esc(l)}</b>`:`<a href="${u}" target="_blank" rel="noopener">${esc(l)}</a>`}</li>`).join("")}</ul></div>`).join("");
 
 renderCal();renderDay();renderStats();
+
+/* ---------- shared sync ---------- */
+function setSync(state,err){
+  const n=document.getElementById("syncnote");if(!n)return;
+  n.textContent=state==="on"?"Ticks are saved in this page and sync across all your devices.":state==="error"?"A tick couldn't be saved"+(err&&err.code==="quota_exceeded"?": the page's storage is full.":". Check your connection and tick it again."):"Progress is saved in this browser.";
+}
+(async()=>{
+  let db=null;try{db=window.claude&&await window.claude.use("db")}catch(e){}
+  if(!db)return;
+  let first=true;
+  db.collection("progress").onSnapshot(snap=>{
+    const remote={};snap.docs.forEach(d=>{const t=(d.data()||{}).ticks||{};for(const id in t)remote[id]=1});
+    if(first){
+      first=false;sharedDb=db;setSync("on");
+      // one-time move of ticks made earlier in this browser
+      let moved=false;try{moved=localStorage.getItem("plan-moved")==="1"}catch(e){}
+      if(!moved){
+        const local=Object.keys(done).filter(id=>!remote[id]);
+        if(local.length){local.forEach(id=>{remote[id]=1;dirty.add(dateOf(id))});done=remote;save()}
+        try{localStorage.setItem("plan-moved","1")}catch(e){}
+      }
+    }
+    done=remote;
+    renderCal();renderStats();
+    if(!document.querySelector("#day details[open]"))renderDay();
+    else document.querySelectorAll("#day input[data-id]").forEach(i=>{i.checked=!!done[i.dataset.id];i.closest(".row").querySelector("details").classList.toggle("done",i.checked)});
+    const [a,b]=progress(selK);const f=document.getElementById("daycount");if(f)f.textContent="· "+a+" of "+b+" tasks done";
+  },e=>{sharedDb=null;setSync("error",e)});
+})();
 </script>
 
 </body>
